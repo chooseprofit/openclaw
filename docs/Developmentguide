@@ -1,0 +1,561 @@
+# AI Employee Platform — Full Development Guide
+
+> Built on OpenClaw (MIT) · Powered by Claude Computer Use · Delivered via Mac Mini
+
+|Build Time|Total Build Cost|Architecture|Per Client/Month|
+|----------|----------------|------------|----------------|
+|4–6 Weeks |~$1,400         |7 Layers    |$997–$3,497     |
+
+-----
+
+## Table of Contents
+
+1. [Product Overview](#1-product-overview)
+1. [Technology Stack](#2-technology-stack)
+1. [Build Phases](#3-build-phases)
+1. [Full Cost Model](#4-full-cost-model)
+1. [Known Limitations & Mitigations](#5-known-limitations--mitigations)
+1. [Pre-Launch Checklist](#6-pre-launch-checklist)
+1. [Recommended Launch Timeline](#7-recommended-launch-timeline)
+
+-----
+
+## 1. Product Overview
+
+You are building a managed AI employee service. Each client receives a dedicated Mac Mini M4 with a fully configured AI agent that controls the desktop 24/7, communicates over Slack, and handles real business tasks — email, calendar, research, document creation, web browsing, and more.
+
+The product is built on three foundations:
+
+- **OpenClaw (MIT licensed)** — the open-source agent loop, memory system, and skills marketplace
+- **Claude Computer Use API** — gives the agent eyes and hands on the Mac desktop
+- **Your proprietary layer** — provisioning, billing, dashboard, Slack UX, and support
+
+> **Your Competitive Position:** OpenClaw provides the engine. You provide the car. The managed service, hardware, branding, onboarding, and support are your moat. Your clients never install anything. They open Slack and their AI employee is already there, working.
+
+### 1.1 What the Product Does
+
+The AI employee can perform any task a human VA could do on a computer:
+
+- Read, reply to, and organise Gmail
+- Schedule, reschedule, and summarise Google Calendar events
+- Research topics on the web and produce written summaries
+- Create Google Docs, Sheets, and Slides
+- Fill out web forms and navigate websites visually
+- Post to Slack channels on behalf of the client
+- Run terminal commands and scripts on the Mac
+- Execute custom workflows via OpenClaw skills
+
+### 1.2 High-Level Architecture
+
+|Layer|Component               |Who Builds It               |
+|-----|------------------------|----------------------------|
+|1    |OpenClaw Core Agent Loop|Fork from GitHub (free)     |
+|2    |Claude Computer Use Loop|Build on top of OpenClaw    |
+|3    |Slack Business Interface|Build — wraps OpenClaw Slack|
+|4    |Memory & Context Manager|Extend OpenClaw memory      |
+|5    |Admin Dashboard         |Build from scratch          |
+|6    |Provisioning System     |Build from scratch          |
+|7    |Billing & Usage Caps    |Build — Stripe integration  |
+
+-----
+
+## 2. Technology Stack
+
+|Area           |Technology                       |Purpose                         |
+|---------------|---------------------------------|--------------------------------|
+|Agent Engine   |OpenClaw (TypeScript/Node)       |Core agent, memory, skills      |
+|AI Model       |Claude Sonnet 4.6 via API        |Reasoning and task planning     |
+|Desktop Control|Claude Computer Use + PyAutoGUI  |Screen vision and mouse/keyboard|
+|Messaging      |Slack Bolt SDK (Node)            |Client-facing communication     |
+|Hardware       |Mac Mini M4 (macOS Sequoia)      |Dedicated per-client compute    |
+|Process Mgmt   |launchd (macOS native)           |Keep agent alive 24/7           |
+|Database       |SQLite (local) + Supabase (cloud)|Memory, logs, task queue        |
+|Dashboard      |Next.js + Tailwind CSS           |Admin control panel             |
+|Billing        |Stripe                           |Subscriptions, usage caps       |
+|Monitoring     |UptimeRobot + custom heartbeat   |Detect offline agents           |
+|Virtual Display|BetterDummy (macOS)              |Headless 1920x1080 screen       |
+
+-----
+
+## 3. Build Phases
+
+Each phase is designed to be built using Claude Code (Max 20x plan recommended). The Claude Code prompts included are production-quality starting points — paste them directly into your terminal.
+
+-----
+
+### PHASE 0 — Environment Setup
+
+**Duration:** 1 Day · **Difficulty:** Easy
+
+#### 0.1 Mac Mini Initial Configuration
+
+Perform these steps manually on each Mac Mini before running any scripts:
+
+1. System Settings → General → Login Items: Enable auto-login
+1. System Settings → Privacy & Security → Accessibility: Grant Terminal full access
+1. System Settings → Privacy & Security → Screen Recording: Grant Terminal access
+1. Install BetterDummy — create a virtual 1920x1080 display
+1. Install Node.js v20+ via homebrew: `brew install node`
+1. Install Python 3.11+: `brew install python`
+1. Install Chrome and sign into the client Google account
+1. Enable Screen Sharing for remote monitoring
+
+#### 0.2 Fork & Clone OpenClaw
+
+Fork OpenClaw on GitHub under your own organisation, then clone:
+
+```bash
+git clone https://github.com/YOUR_ORG/openclaw.git
+cd openclaw
+npm install
+npm run build
+```
+
+> ⚠️ **Important — Lock Your Fork:** Immediately after forking, pin your dependencies (`npm shrinkwrap`) and create a production branch. Never auto-merge upstream changes without testing first. OpenClaw is community-maintained — a breaking change could take down all your clients.
+
+#### 0.3 Claude Code Prompt — Phase 0
+
+```
+"I am building an AI employee product on top of OpenClaw. I have cloned the repo at ./openclaw.
+Please audit the codebase and give me: (1) the entry point file, (2) where the Slack integration
+lives, (3) where the memory system lives, (4) the agent loop file, (5) any files I should NOT
+modify because they are core to OpenClaw stability. Output as a structured file map."
+```
+
+-----
+
+### PHASE 1 — Core Agent Loop
+
+**Duration:** 3–5 Days · **Difficulty:** Medium
+
+This phase establishes the heartbeat of the product: a persistent process that listens to Slack, passes tasks to Claude, and responds back to the client. This is the foundation everything else is built on.
+
+#### 1.1 What Gets Built
+
+- A Slack bot that joins the client’s dedicated channel
+- A message router that passes tasks to Claude Sonnet 4.6
+- A basic task executor (text responses only at this stage)
+- A launchd plist that keeps the agent alive on reboot
+- A simple heartbeat ping every 5 minutes
+
+#### 1.2 File Structure
+
+```
+/agent
+  /core
+    agent.ts          — main loop
+    slackInterface.ts — Slack Bolt setup
+    claudeClient.ts   — Anthropic API wrapper
+    memory.ts         — SQLite memory layer
+    taskQueue.ts      — task queue manager
+    heartbeat.ts      — uptime ping
+  /config
+    persona.json      — agent name, personality, instructions
+    client.json       — client ID, plan, limits
+```
+
+#### 1.3 Claude Code Prompt — Phase 1
+
+```
+"Build a TypeScript agent loop that: (1) connects to Slack using Bolt SDK and listens to a
+specific channel, (2) on receiving a message passes it to Claude Sonnet 4.6 via the Anthropic
+SDK with a system prompt loaded from config/persona.json, (3) streams the response back to
+Slack, (4) stores every exchange in a SQLite database with timestamp, user_id, message,
+response, tokens_used. Include error handling so the process never crashes. Use TypeScript
+strictly typed."
+```
+
+#### 1.4 Persona Configuration
+
+Each client’s agent needs a distinct identity. The `persona.json` file drives this:
+
+```json
+{
+  "name": "Alex",
+  "role": "Executive Assistant",
+  "personality": "Professional, proactive, concise. Always confirms before taking irreversible actions like sending emails.",
+  "client_name": "Sarah Johnson",
+  "company": "Acme Corp",
+  "timezone": "America/New_York",
+  "working_hours": "8am-8pm",
+  "skills_enabled": ["gmail", "calendar", "web_search", "drive"]
+}
+```
+
+-----
+
+### PHASE 2 — Computer Use Desktop Control
+
+**Duration:** 5–7 Days · **Difficulty:** Hard
+
+This is the most technically complex phase. It transforms the agent from a text chatbot into an agent that can actually see and control the Mac desktop. This is your core differentiator.
+
+#### 2.1 How Computer Use Works
+
+1. Capture a screenshot of the virtual display
+1. Send screenshot + task description to Claude Computer Use API
+1. Claude returns a list of actions (click, type, scroll, key press)
+1. Execute each action via PyAutoGUI
+1. Capture a new screenshot and send back to Claude
+1. Repeat until Claude signals `task_complete` or max iterations reached
+
+#### 2.2 Safety Guardrails (Critical)
+
+> 🚨 **Build these before going live:**
+> 
+> - **MAX_ITERATIONS:** Hard cap at 30 screenshot loops per task. Beyond this, kill and report failure.
+> - **MAX_COST_PER_TASK:** If a task consumes more than $0.50 in API tokens, terminate it.
+> - **CONFIRMATION_REQUIRED:** Before sending any email, deleting any file, or making any purchase, the agent must send a Slack message asking for approval and wait for a “yes” response.
+> - **FORBIDDEN_ACTIONS:** Maintain a list of apps/URLs the agent can never open (banking sites, etc.)
+> - **SCREENSHOT_LOG:** Save every screenshot taken during a task for 30 days (proof of work + debugging).
+
+#### 2.3 Python Computer Use Controller
+
+Computer Use actions are executed via Python (PyAutoGUI). This runs as a sidecar process:
+
+```bash
+pip install pyautogui pillow anthropic
+```
+
+```python
+# computer_use_controller.py
+import pyautogui, anthropic, base64, json
+from PIL import ImageGrab
+
+def capture_screen():
+    img = ImageGrab.grab()
+    img.save("/tmp/screen.png")
+    with open("/tmp/screen.png", "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+def execute_action(action):
+    if action["type"] == "mouse_move":
+        pyautogui.moveTo(action["x"], action["y"])
+    elif action["type"] == "left_click":
+        pyautogui.click(action["x"], action["y"])
+    elif action["type"] == "type":
+        pyautogui.typewrite(action["text"], interval=0.02)
+    elif action["type"] == "key":
+        pyautogui.press(action["key"])
+    elif action["type"] == "scroll":
+        pyautogui.scroll(action["direction"], action["x"], action["y"])
+```
+
+#### 2.4 Claude Code Prompt — Phase 2
+
+```
+"Build a TypeScript module computerUse.ts that: (1) takes a task string and calls a Python
+sidecar process to capture a screenshot, (2) sends the screenshot + task to the Claude API
+with computer_use_20250124 tool enabled, (3) iterates the action loop until stop_condition
+is met or MAX_ITERATIONS (30) is reached, (4) logs every screenshot and action to SQLite
+with timestamps, (5) returns a summary of what was done. Include a cost tracker that sums
+tokens each iteration. If cost exceeds $0.50, terminate and return partial_complete status."
+```
+
+-----
+
+### PHASE 3 — Memory & Context Management
+
+**Duration:** 2–3 Days · **Difficulty:** Medium
+
+OpenClaw has basic memory. You need to extend it for a commercial, multi-week service where context grows large and must stay performant.
+
+#### 3.1 Memory Architecture
+
+|Memory Type      |What It Stores                           |Retention             |
+|-----------------|-----------------------------------------|----------------------|
+|Working Memory   |Current task context, active conversation|Session only          |
+|Episodic Memory  |Past tasks, what was done and when       |90 days, then archived|
+|Semantic Memory  |Client preferences, habits, key facts    |Permanent             |
+|Procedural Memory|How to do recurring tasks for this client|Permanent             |
+
+#### 3.2 Memory Compression (Critical for Cost)
+
+Raw conversation history grows fast. After 7 days, summarise old memories rather than keeping them verbatim. This dramatically reduces context window costs.
+
+> **Weekly Compression Schedule:** Every Sunday at 3am, run a Claude API call that reads the past week’s episodic memory and produces a 3-sentence summary per day. Replace the raw entries with the summary. This keeps the context window lean and cuts API costs by 40–60% over time.
+
+#### 3.3 Claude Code Prompt — Phase 3
+
+```
+"Extend the memory.ts module with three tables: episodic_memory (task_id, date, summary,
+raw_log), semantic_memory (key, value, last_updated), procedural_memory (task_type,
+steps_json). Build a memoryManager.ts that: (1) before each task, fetches relevant semantic
+and recent episodic memories and injects them into the Claude system prompt, (2) after each
+task, writes a summary to episodic_memory, (3) runs a weekly cron job using node-cron that
+compresses episodic memories older than 7 days into single-sentence summaries using the
+Claude API."
+```
+
+-----
+
+### PHASE 4 — Skills & Tool Integrations
+
+**Duration:** 4–6 Days · **Difficulty:** Medium
+
+OpenClaw has 565+ community skills. You will enable a curated set for your clients and build a few proprietary ones. Each skill is a structured tool the agent can call instead of using Computer Use — cheaper and faster for common tasks.
+
+#### 4.1 Skills to Enable from OpenClaw ClawHub
+
+|Skill          |What It Does                      |Plan Availability|
+|---------------|----------------------------------|-----------------|
+|Gmail          |Read, send, label, search email   |All plans        |
+|Google Calendar|Create, edit, check availability  |All plans        |
+|Google Drive   |Create, read, edit Docs/Sheets    |Pro & Executive  |
+|Web Search     |Live web research via Brave API   |All plans        |
+|Web Scraper    |Extract data from websites        |Pro & Executive  |
+|Slack Post     |Post messages to other channels   |All plans        |
+|File Manager   |Read/write local files on Mac Mini|All plans        |
+|Terminal       |Execute shell commands            |Executive only   |
+
+#### 4.2 Proprietary Skills to Build
+
+- **Daily Briefing Skill** — posts a morning summary to Slack every day at 8am
+- **Task Report Skill** — generates and posts a weekly PDF report of completed work
+- **Approval Gate Skill** — pauses before irreversible actions and waits for Slack confirmation
+- **Usage Monitor Skill** — tracks daily API costs and alerts you if a client is over budget
+
+#### 4.3 Claude Code Prompt — Phase 4
+
+```
+"Build a skills loader for our agent. Create a SkillRegistry class that: (1) loads enabled
+skills from config/client.json, (2) registers each skill as a tool definition for the Claude
+API tool_use parameter, (3) routes tool_use responses back to the correct skill executor,
+(4) has a DailyBriefing skill that runs at 8am client timezone and posts to Slack: today's
+calendar events, unread email count, pending tasks, and weather. Use node-cron for
+scheduling."
+```
+
+-----
+
+### PHASE 5 — Admin Dashboard
+
+**Duration:** 5–7 Days · **Difficulty:** Medium
+
+The admin dashboard is your mission control. It lets you see the status of all client agents, monitor costs, review logs, restart agents remotely, and manage billing. Built in Next.js, hosted on Vercel.
+
+#### 5.1 Dashboard Pages
+
+|Page         |Contents                                                                     |
+|-------------|-----------------------------------------------------------------------------|
+|Overview     |Grid of all clients — green/red status indicator, tasks today, API cost today|
+|Client Detail|Task log, cost graph, memory viewer, restart button, persona editor          |
+|Task Log     |Searchable list of all tasks with status, duration, cost, screenshot replay  |
+|Cost Monitor |Real-time API spend per client, projected monthly cost, alert thresholds     |
+|Onboarding   |Form to configure and provision a new client agent                           |
+|Reports      |Generate and download weekly/monthly PDF reports per client                  |
+
+#### 5.2 Heartbeat API
+
+Each Mac Mini runs a lightweight HTTP server on port 3001. The dashboard polls it every 60 seconds:
+
+```
+GET http://MAC_MINI_IP:3001/health
+Response: { status: "ok", uptime: 43200, tasks_today: 12, cost_today: 1.24 }
+```
+
+#### 5.3 Claude Code Prompt — Phase 5
+
+```
+"Build a Next.js admin dashboard with Tailwind CSS. It should: (1) show a card grid of all
+clients with live status pulled from each Mac Mini's health endpoint, (2) have a client
+detail page showing task history from Supabase, cost graph using Recharts, and a Restart
+Agent button that SSHs into the Mac Mini and runs launchctl kickstart, (3) have an
+Onboarding page with a form that generates and downloads a setup script for a new Mac Mini.
+Use Next.js App Router, server components where possible, and deploy to Vercel."
+```
+
+-----
+
+### PHASE 6 — Provisioning Automation
+
+**Duration:** 2–3 Days · **Difficulty:** Medium
+
+Without automation, setting up each new Mac Mini takes 2–3 hours and is error-prone. This phase builds a script that provisions a fresh Mac Mini in under 20 minutes.
+
+#### 6.1 Provisioning Script Flow
+
+1. Admin fills in onboarding form (client name, Google account, Slack token, plan)
+1. Dashboard generates `provision.sh` with all values pre-filled
+1. Admin downloads `provision.sh`, copies to Mac Mini, runs it
+1. Script installs all dependencies, clones your fork, configures launchd
+1. Agent starts, connects to Slack, sends welcome message to client
+1. Mac Mini registers itself with your dashboard via heartbeat
+
+#### 6.2 What the Script Does
+
+- Installs Node.js, Python, homebrew, BetterDummy
+- Clones your locked fork of OpenClaw
+- Writes `persona.json` and `client.json` from the form data
+- Creates and loads the launchd plist for auto-start
+- Sets up SQLite database with correct schema
+- Runs first-boot test — sends a test message to confirm Slack connection
+- Sends “Your AI employee Alex is ready!” message to client Slack channel
+
+#### 6.3 Claude Code Prompt — Phase 6
+
+```
+"Build a bash script generator in TypeScript. It takes a ClientConfig object (name,
+slackToken, googleAccountEmail, plan, agentName, timezone) and outputs a provision.sh
+bash script that: (1) installs all dependencies via homebrew and pip, (2) clones the
+agent repo from GitHub, (3) writes persona.json and client.json with the provided values,
+(4) creates a launchd plist at ~/Library/LaunchAgents/com.aiemployee.agent.plist that
+starts on login and restarts on crash, (5) runs npm install and npm run build, (6) starts
+the agent and verifies it sends a test Slack message. Make the script idempotent so
+re-running it is safe."
+```
+
+-----
+
+### PHASE 7 — Billing, Usage Caps & Reporting
+
+**Duration:** 3–4 Days · **Difficulty:** Medium
+
+#### 7.1 Billing Architecture
+
+- Stripe handles monthly subscriptions — one product per plan tier
+- Each Mac Mini tracks its own token usage in SQLite
+- Every 24 hours, usage is synced to Supabase
+- If a client hits their daily task limit, the agent pauses and sends a Slack notification
+- If they exceed by 20%, charge overage at $0.05 per task via Stripe metered billing
+
+#### 7.2 Plan Limits
+
+|Limit              |Assistant $997|Pro $1,997      |Executive $3,497        |
+|-------------------|--------------|----------------|------------------------|
+|Tasks/day          |20            |50              |100                     |
+|Computer Use tasks |5/day         |20/day          |50/day                  |
+|Max iterations/task|15            |25              |30                      |
+|Memory retention   |30 days       |90 days         |Unlimited               |
+|Report frequency   |Weekly        |Weekly + Monthly|Daily + Weekly + Monthly|
+|Support            |Email (48h)   |Email (24h)     |Slack direct (same day) |
+
+#### 7.3 Weekly Report Contents
+
+Every Monday morning the agent generates and sends a PDF report to the client via Slack:
+
+- Total tasks completed this week
+- Breakdown by category (email, calendar, research, documents, web)
+- Estimated hours saved (assume 12 min per task)
+- Top 5 tasks with screenshots
+- API cost (internal — do not show to client)
+
+#### 7.4 Claude Code Prompt — Phase 7
+
+```
+"Build a UsageManager class that: (1) increments task counts in SQLite after each task,
+(2) checks against plan limits from client.json before starting each task, (3) if at 80%
+of daily limit sends a Slack warning, (4) if at 100% pauses the agent and sends a
+limit-reached message with an upgrade link, (5) resets counts at midnight client timezone
+using node-cron. Also build a WeeklyReport class that queries the past 7 days of tasks
+from SQLite, generates a Markdown summary, converts it to PDF using puppeteer, and
+uploads it to the client Slack channel."
+```
+
+-----
+
+## 4. Full Cost Model
+
+### 4.1 Build Costs
+
+|Item                             |Cost             |Type                |
+|---------------------------------|-----------------|--------------------|
+|Claude Code Max 20x (2 months)   |$400             |Monthly subscription|
+|Claude API — Computer Use testing|$200–400         |Pay per token       |
+|Mac Mini M4 (dev unit)           |$599             |One-time            |
+|Supabase (free tier during build)|$0               |Free                |
+|Vercel (dashboard hosting)       |$0–20            |Monthly             |
+|Domain + SSL                     |$15              |Annual              |
+|**TOTAL BUILD COST**             |**~$1,200–1,400**|                    |
+
+### 4.2 Per-Client Monthly Operating Cost
+
+|Item                            |Low         |High        |
+|--------------------------------|------------|------------|
+|Claude API (Sonnet 4.6)         |$30         |$150        |
+|Computer Use API (heavy usage)  |$20         |$200        |
+|Google Workspace                |$12         |$12         |
+|Slack (per workspace)           |$0          |$8          |
+|Electricity (Mac Mini ~6W)      |$3          |$5          |
+|Mac Mini amortised (24 months)  |$25         |$25         |
+|Your time (monitoring + support)|$20         |$50         |
+|**TOTAL COST PER CLIENT**       |**~$110/mo**|**~$450/mo**|
+
+### 4.3 Margin Per Plan
+
+|Plan     |Client Pays|Your Cost|Gross Profit|
+|---------|-----------|---------|------------|
+|Assistant|$997       |~$200    |**~$797**   |
+|Pro      |$1,997     |~$350    |**~$1,647** |
+|Executive|$3,497     |~$450    |**~$3,047** |
+
+**10 Pro clients = ~$16,470/mo gross profit.**
+
+-----
+
+## 5. Known Limitations & Mitigations
+
+|Limitation                     |Impact                                      |Mitigation                                                   |
+|-------------------------------|--------------------------------------------|-------------------------------------------------------------|
+|Computer Use is ~72.5% accurate|1 in 4 visual tasks may fail or need retry  |Max iteration cap + fallback to API skills                   |
+|Prompt injection via email     |Malicious email could hijack agent          |Sanitise all external content before injecting into context  |
+|Google session expiry          |Agent locked out of Gmail/Drive             |Persistent Chrome profile + session health check every 30 min|
+|No multi-tasking               |One task at a time per agent                |Task queue — clients are told “processing, ~2 min”           |
+|macOS security popups          |Popups block the agent mid-task             |Pre-grant all permissions during provisioning                |
+|API cost spikes                |One heavy client could cost $400+ in a month|Daily cost cap + Slack alert at 80% + hard cut at 120%       |
+|Mac Mini power outage          |Agent offline until power restored          |UPS battery + heartbeat alert within 5 min                   |
+|OpenClaw upstream changes      |Breaking changes break your product         |Locked fork — never auto-merge upstream                      |
+
+-----
+
+## 6. Pre-Launch Checklist
+
+Complete every item before onboarding your first paying client.
+
+### Agent
+
+- [ ] Agent loop runs 24/7 without crashing (test for 72 hours straight)
+- [ ] Task queue handles concurrent Slack messages gracefully
+- [ ] Max iteration kill switch tested and confirmed working
+- [ ] Cost cap tested — task terminates correctly at $0.50
+- [ ] Confirmation gate tested — agent waits for approval before sending emails
+- [ ] Memory compression cron job runs without errors
+- [ ] All five default skills tested end-to-end
+
+### Infrastructure
+
+- [ ] Heartbeat alert fires within 5 minutes of Mac Mini going offline
+- [ ] launchd plist tested — agent restarts automatically after crash and after reboot
+- [ ] Provisioning script tested on a clean Mac Mini from zero to working agent in <20 min
+- [ ] BetterDummy virtual display persists after reboot
+- [ ] Chrome session stays logged into Google after 7 days
+
+### Business
+
+- [ ] Stripe billing tested — subscription created, payment taken, webhook received
+- [ ] Usage cap enforced — agent pauses when daily limit reached
+- [ ] Weekly report generates and posts to Slack without errors
+- [ ] Admin dashboard shows correct status for all clients
+- [ ] Terms of service written and acknowledged by beta client
+- [ ] Data processing agreement in place (you store client email data)
+
+-----
+
+## 7. Recommended Launch Timeline
+
+|Week   |Phase            |Deliverable                                  |
+|-------|-----------------|---------------------------------------------|
+|Week 1 |Phase 0 + Phase 1|Working Slack bot — text responses only      |
+|Week 2 |Phase 2          |Computer Use loop working on Gmail and Chrome|
+|Week 3 |Phase 3 + Phase 4|Memory system + 5 core skills enabled        |
+|Week 4 |Phase 5 + Phase 6|Admin dashboard live + provisioning automated|
+|Week 5 |Phase 7          |Billing live + usage caps + weekly reports   |
+|Week 6 |Beta Testing     |1 free beta client — real workload, 2 weeks  |
+|Month 2|Launch           |First 3 paying clients onboarded             |
+
+
+> **Success Metric:** Your product is ready to sell when one beta client uses it for 2 consecutive weeks, completes 50+ tasks, and says they would pay for it. That is your green light.
+
+-----
+
+*AI Employee Platform Development Guide v1.0 — April 2026 — Confidential*
